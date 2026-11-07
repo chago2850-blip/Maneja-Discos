@@ -1,0 +1,50 @@
+feature,area,priority,original,clone,notes
+Mapa de discos y particiones con espacio libre,particiones,must,yes,yes,S02
+Propiedades de disco y partición,particiones,must,yes,yes,S07
+Cola de operaciones pendientes (aplicar/descartar/deshacer),particiones,must,yes,yes,S03
+Generar script de las operaciones pendientes,particiones,should,yes,yes,S03 F14
+Crear partición (FS / etiqueta / tamaño),particiones,must,yes,yes,S04 F05
+Formatear partición,particiones,must,yes,yes,S05 F07
+Eliminar partición,particiones,must,yes,yes,F07
+Redimensionar partición,particiones,must,yes,yes,S06 F06; según FS y sistema
+Cambiar etiqueta,particiones,must,yes,yes,F07
+Cambiar letra de unidad (Windows),particiones,should,yes,yes,
+Ocultar / activar partición,particiones,could,yes,yes,
+Inicializar disco (nueva tabla MBR/GPT),particiones,must,yes,yes,
+Convertir MBR↔GPT sin pérdida,particiones,should,yes,yes,F11; sgdisk / mbr2gpt
+Comprobar y reparar sistema de archivos,herramientas,must,yes,yes,F13
+Prueba de superficie (sectores dañados/lentos),herramientas,should,yes,yes,F12
+Copia de seguridad de imagen de disco/partición,respaldo,must,yes,yes,F01
+Copia de seguridad de archivos y carpetas,respaldo,must,yes,yes,S08
+Respaldos incrementales y diferenciales,respaldo,must,yes,yes,cadenas
+Compresión y división del archivo de imagen,respaldo,must,yes,yes,
+Cifrado con contraseña,respaldo,must,yes,yes,AES-256-GCM
+Exclusiones por máscara,respaldo,should,yes,yes,
+Trabajos programados con estrategia y retención,respaldo,must,yes,yes,S09 F02
+Verificar copia,respaldo,must,yes,yes,
+Fijar puntos de restauración,respaldo,could,yes,yes,
+Restaurar disco/partición desde imagen,restauración,must,yes,yes,F03
+Restaurar archivos sueltos de un respaldo,restauración,must,yes,yes,F04
+Montar imagen como unidad,restauración,could,yes,partial,exportar a .img para montarla con el sistema
+Copiar disco o partición (clonar),migración,must,yes,yes,F08
+Migrar SO con ajuste de arranque,migración,could,yes,partial,clonar disco completo; sin ajuste de BCD
+Borrado seguro de disco/partición,borrado,must,yes,yes,F09
+10 algoritmos de borrado + algoritmo propio,borrado,must,yes,yes,S13
+Borrar espacio libre,borrado,must,yes,yes,F10
+Borrar archivos (triturar),borrado,should,yes,yes,
+TRIM para SSD,borrado,should,yes,yes,
+Verificación del borrado (% de sectores),borrado,should,yes,yes,
+Informe de borrado,borrado,should,yes,yes,
+Sello de borrado en el MBR,borrado,could,yes,yes,
+Mis actividades con registros,general,must,yes,yes,S15
+Notificación por correo,general,could,yes,no,
+Ajustes (alineación / compresión / división),general,should,yes,yes,S16
+Grabar ISO de rescate en USB,herramientas,should,partial,yes,alternativa abierta al constructor WinPE
+Discos virtuales (VHD/VHDX/VMDK),herramientas,could,yes,no,
+Windows / Linux / macOS,plataforma,must,no,yes,el original solo es Windows
+Constructor WinPE,herramientas,skip,yes,no,depende de Windows ADK
+Corrector de arranque BCD/EFI,herramientas,skip,yes,no,específico de Windows
+Conversión FS sin pérdida (FAT/NTFS/HFS),particiones,skip,yes,no,sin herramientas abiertas fiables
+Desfragmentar/compactar MFT,herramientas,skip,yes,no,alto riesgo
+Exclusiones de Exchange/SQL/Hyper-V,respaldo,skip,yes,no,requiere VSS writers
+Licencias y consola remota,general,skip,yes,no,el clon es libre

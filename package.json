@@ -1,0 +1,115 @@
+{
+  "name": "maneja-discos",
+  "productName": "Maneja Discos",
+  "version": "1.0.0",
+  "description": "Gestor de discos libre: copias de seguridad, particiones, clonado y borrado seguro para Windows, Linux y macOS.",
+  "main": "src/main/main.js",
+  "homepage": "https://github.com/chago2850-blip/Maneja-Discos",
+  "author": {
+    "name": "Santiago Miguel",
+    "email": "chago2850@gmail.com"
+  },
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/engine.test.js",
+    "dist": "electron-builder --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:linux": "electron-builder --linux --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "io.github.chago2850blip.manejadiscos",
+    "productName": "Maneja Discos",
+    "copyright": "© 2026 Santiago Miguel · GPL-3.0-or-later",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "LICENSE"
+    ],
+    "asarUnpack": [
+      "src/engine/**"
+    ],
+    "artifactName": "Maneja-Discos-${version}-${os}-${arch}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Maneja Discos",
+      "artifactName": "Maneja-Discos-${version}-Windows-${arch}-Instalador.${ext}"
+    },
+    "portable": {
+      "artifactName": "Maneja-Discos-${version}-Windows-${arch}-Portable.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.utilities",
+      "identity": "-",
+      "artifactName": "Maneja-Discos-${version}-macOS-${arch}.${ext}",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Maneja Discos"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "System",
+      "maintainer": "Santiago Miguel <chago2850@gmail.com>",
+      "synopsis": "Copias, particiones, clonado y borrado seguro de discos",
+      "artifactName": "Maneja-Discos-${version}-Linux-${arch}.${ext}"
+    }
+  }
+}

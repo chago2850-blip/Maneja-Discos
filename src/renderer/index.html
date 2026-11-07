@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Maneja Discos</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="assets/logo.png" alt="" width="36" height="36">
+        <div>
+          <div class="brand-name">Maneja Discos</div>
+          <div class="brand-sub" id="brand-sub">Gestor de discos libre</div>
+        </div>
+      </div>
+      <nav id="nav"></nav>
+      <div class="sidebar-foot" id="sidebar-foot"></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1 id="view-title">Inicio</h1>
+          <div class="view-sub" id="view-sub"></div>
+        </div>
+        <div class="topbar-actions" id="topbar-actions"></div>
+      </header>
+      <section class="content" id="content"></section>
+      <div class="pending" id="pending" hidden></div>
+    </main>
+  </div>
+  <div class="jobs-dock" id="jobs-dock"></div>
+  <div class="toasts" id="toasts"></div>
+  <div class="modal-root" id="modal-root"></div>
+  <script src="app.js"></script>
+</body>
+</html>

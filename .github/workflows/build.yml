@@ -1,0 +1,94 @@
+# Prueba el motor (incluidos discos reales en Linux) y genera los instaladores
+# para Windows, Linux y macOS. Al subir a main publica la versión de package.json.
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Herramientas de disco
+        run: sudo apt-get update -q && sudo apt-get install -y -q parted fdisk gdisk dosfstools ntfs-3g exfatprogs e2fsprogs
+      - name: Pruebas del motor (con dispositivos loop reales)
+        run: sudo env "PATH=$PATH" MD_INCLUDE_LOOP=1 node --test test/engine.test.js
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: --linux
+          - os: windows-latest
+            target: --win
+          - os: macos-latest
+            target: --mac
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Empaquetar
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder ${{ matrix.target }} --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instaladores-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - id: version
+        run: echo "v=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          name: Maneja Discos ${{ steps.version.outputs.v }}
+          make_latest: true
+          files: dist/*
+          body: |
+            ## Maneja Discos ${{ steps.version.outputs.v }}
+            Gestor de discos libre: copias de seguridad, particiones, clonado y borrado seguro.
+
+            **Descarga el instalador de tu sistema:**
+            | Sistema | Archivo |
+            |---|---|
+            | Windows (Intel/AMD) | `Maneja-Discos-…-Windows-x64-Instalador.exe` (o `…-Portable.exe` sin instalar) |
+            | Windows ARM | `Maneja-Discos-…-Windows-arm64-Instalador.exe` |
+            | macOS Apple Silicon | `Maneja-Discos-…-macOS-arm64.dmg` |
+            | macOS Intel | `Maneja-Discos-…-macOS-x64.dmg` |
+            | Linux (Ubuntu/Debian) | `Maneja-Discos-…-Linux-amd64.deb` o `…-x86_64.AppImage` |
+            | Linux ARM | `…-arm64.deb` o `…-arm64.AppImage` |
+
+            Las operaciones de disco piden permisos de administrador. En macOS, si el sistema bloquea la app: Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente.
