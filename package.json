@@ -1,7 +1,7 @@
 {
   "name": "maneja-discos",
   "productName": "Maneja Discos",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Gestor de discos libre y de código abierto (GPL-3.0): copias de seguridad, particiones, clonado y borrado seguro para Windows, Linux y macOS.",
   "main": "src/main/main.js",
   "homepage": "https://github.com/chago2850-blip/Maneja-Discos",
@@ -101,12 +101,17 @@
           ]
         }
       ],
-      "icon": "build/icon.png",
+      "icon": "build/icons",
       "category": "System",
       "maintainer": "Santiago Miguel <chago2850@gmail.com>",
       "synopsis": "Gestor de discos libre y de código abierto (GPL-3.0)",
       "artifactName": "Maneja-Discos-${version}-Linux-${arch}.${ext}",
-      "description": "Copias de seguridad, particiones, clonado y borrado seguro. Software libre bajo la GPL-3.0-or-later."
+      "description": "Copias de seguridad, particiones, clonado y borrado seguro. Software libre bajo la GPL-3.0-or-later.",
+      "desktop": {
+        "StartupWMClass": "Maneja Discos",
+        "Keywords": "disco;particion;copia;respaldo;backup;borrado;clonar;",
+        "GenericName": "Gestor de discos"
+      }
     },
     "afterPack": "build/afterPack.js",
     "extraResources": [
