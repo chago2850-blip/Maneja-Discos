@@ -1,3 +1,20 @@
+/*
+ * Maneja Discos — gestor de discos libre y de código abierto
+ * Copyright (C) 2026 Santiago Miguel <chago2850@gmail.com>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * Este programa es software libre: puede redistribuirlo y/o modificarlo bajo los
+ * términos de la Licencia Pública General GNU publicada por la Free Software
+ * Foundation, ya sea la versión 3 de la Licencia o (a su elección) cualquier
+ * versión posterior.
+ *
+ * Este programa se distribuye con la esperanza de que sea útil, pero SIN NINGUNA
+ * GARANTÍA; ni siquiera la garantía implícita de COMERCIABILIDAD o IDONEIDAD PARA
+ * UN PROPÓSITO PARTICULAR. Consulte la Licencia Pública General GNU para más detalles.
+ *
+ * Debería haber recibido una copia de la Licencia Pública General GNU junto con
+ * este programa (archivo LICENSE). Si no, consulte <https://www.gnu.org/licenses/>.
+ */
 'use strict';
 /* Maneja Discos — interfaz (sin frameworks). Toda la E/S pasa por window.md (preload). */
 
@@ -1191,9 +1208,15 @@ async function viewSettings() {
       field('Carpeta de informes de borrado', h('div', { class: 'row' }, h('input', { type: 'text', value: s.reportsDir, onChange: (e) => set({ reportsDir: e.target.value }) }), h('button', { class: 'btn', onClick: () => md.shell.open(s.reportsDir) }, 'Abrir')))),
     h('div', { class: 'card' }, h('h2', {}, 'Acerca de'),
       h('div', { class: 'row', style: { alignItems: 'flex-start' } }, h('img', { src: 'assets/logo.png', width: 64 }),
-        h('div', {}, h('b', {}, `Maneja Discos ${i.version}`), h('div', { class: 'muted' }, 'Gestor de discos libre y de código abierto (GPL-3.0-or-later).'),
-          h('div', { class: 'muted' }, 'Desarrollado por Santiago Miguel · chago2850@gmail.com'),
-          h('div', { style: { marginTop: '8px' } }, h('button', { class: 'btn small', onClick: () => md.shell.external('https://github.com/chago2850-blip/Maneja-Discos') }, 'Proyecto en GitHub'))))),
+        h('div', {}, h('b', {}, `Maneja Discos ${i.version}`),
+          h('div', { class: 'muted' }, 'Copyright © 2026 Santiago Miguel · chago2850@gmail.com'),
+          h('p', { class: 'muted', style: { fontSize: '12.5px', margin: '8px 0' } },
+            'Este programa es software libre: puede redistribuirlo y/o modificarlo bajo los términos de la Licencia Pública General GNU, versión 3 o (a su elección) cualquier versión posterior. ',
+            h('b', {}, 'Se distribuye SIN NINGUNA GARANTÍA.'), ' Consulte la licencia para más detalles.'),
+          h('div', { class: 'row', style: { flexWrap: 'wrap' } },
+            h('button', { class: 'btn small', onClick: () => showLegal('license') }, 'Ver licencia (GPL-3.0)'),
+            h('button', { class: 'btn small', onClick: () => showLegal('thirdParty') }, 'Componentes de terceros'),
+            h('button', { class: 'btn small', onClick: () => md.shell.external('https://github.com/chago2850-blip/Maneja-Discos') }, 'Código fuente'))))),
     h('div', { class: 'card' }, h('h2', {}, 'Sistema'),
       h('table', { class: 'table' },
         h('tr', {}, h('th', {}, 'Plataforma'), h('td', {}, `${i.platform} ${i.arch}`)),
@@ -1201,6 +1224,14 @@ async function viewSettings() {
         h('tr', {}, h('th', {}, 'Sistemas de archivos'), h('td', {}, i.fileSystems.map(fsName).join(', '))),
         i.platform === 'linux' ? h('tr', {}, h('th', {}, 'Herramientas que faltan'), h('td', {}, i.missingTools.length ? i.missingTools.join(', ') : 'Ninguna')) : null),
       i.platform === 'darwin' ? h('div', { class: 'notice info', style: { marginTop: '12px' } }, 'En macOS, para leer o escribir discos externos en crudo activa Maneja Discos en Ajustes del Sistema → Privacidad y seguridad → Acceso total al disco.') : null));
+}
+
+async function showLegal(which) {
+  const legal = await md.legal();
+  const text = legal[which] || 'Consulte https://www.gnu.org/licenses/gpl-3.0.html';
+  modal({ title: which === 'license' ? 'Licencia Pública General GNU v3' : 'Componentes de terceros', wide: true,
+    body: h('pre', { class: 'log', style: { maxHeight: '60vh', whiteSpace: 'pre-wrap' } }, text),
+    buttons: [{ label: 'Cerrar' }, which === 'license' ? { label: 'Leer en gnu.org', onClick: () => md.shell.external('https://www.gnu.org/licenses/gpl-3.0.html') } : null].filter(Boolean) });
 }
 
 function applyTheme() {

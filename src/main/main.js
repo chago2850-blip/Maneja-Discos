@@ -1,3 +1,20 @@
+/*
+ * Maneja Discos — gestor de discos libre y de código abierto
+ * Copyright (C) 2026 Santiago Miguel <chago2850@gmail.com>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * Este programa es software libre: puede redistribuirlo y/o modificarlo bajo los
+ * términos de la Licencia Pública General GNU publicada por la Free Software
+ * Foundation, ya sea la versión 3 de la Licencia o (a su elección) cualquier
+ * versión posterior.
+ *
+ * Este programa se distribuye con la esperanza de que sea útil, pero SIN NINGUNA
+ * GARANTÍA; ni siquiera la garantía implícita de COMERCIABILIDAD o IDONEIDAD PARA
+ * UN PROPÓSITO PARTICULAR. Consulte la Licencia Pública General GNU para más detalles.
+ *
+ * Debería haber recibido una copia de la Licencia Pública General GNU junto con
+ * este programa (archivo LICENSE). Si no, consulte <https://www.gnu.org/licenses/>.
+ */
 'use strict';
 const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage, Notification, nativeTheme } = require('electron');
 const fs = require('fs');
@@ -96,6 +113,12 @@ function registerIpc() {
       ? ['parted', 'sfdisk', 'sgdisk', 'mkfs.ntfs', 'mkfs.vfat', 'mkfs.exfat', 'pkexec'].filter((t) => !which(t) && !fs.existsSync(`/usr/sbin/${t}`) && !fs.existsSync(`/sbin/${t}`))
       : [],
   }));
+
+  ipcMain.handle('app:legal', () => {
+    const root = path.join(__dirname, '..', '..');
+    const read = (f) => { try { return fs.readFileSync(path.join(root, f), 'utf8'); } catch { return null; } };
+    return { license: read('LICENSE'), thirdParty: read('THIRD_PARTY_NOTICES.md') };
+  });
 
   ipcMain.handle('disks:list', async () => {
     try {
