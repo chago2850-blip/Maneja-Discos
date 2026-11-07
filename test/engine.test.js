@@ -168,6 +168,21 @@ test('triturar archivos y borrar espacio libre', async () => {
   assert.ok(!fs.existsSync(d));
 });
 
+test('macOS: -plist va justo después del verbo de diskutil', () => {
+  const darwin = require('../src/engine/platform/darwin');
+  assert.deepStrictEqual(darwin._plistArgs(['list', 'physical']), ['list', '-plist', 'physical']);
+  assert.deepStrictEqual(darwin._plistArgs(['info', 'disk4s1']), ['info', '-plist', 'disk4s1']);
+  assert.deepStrictEqual(darwin._plistArgs(['apfs', 'list']), ['apfs', 'list', '-plist']);
+});
+
+test('listar los discos reales de este sistema', { skip: process.env.MD_LIST_SMOKE !== '1' }, async () => {
+  const plat = require('../src/engine/platform').current();
+  const disks = await plat.listDisks();
+  console.log(JSON.stringify(disks.map((d) => ({ id: d.id, model: d.model, size: d.size, style: d.partitionStyle, system: d.isSystem, parts: d.partitions.map((p) => [p.id, p.fs, p.label, p.size]) })), null, 1));
+  assert.ok(disks.length > 0, 'debe encontrar al menos un disco');
+  if (process.platform !== 'linux') assert.ok(disks.some((d) => d.partitions.length > 0), 'al menos un disco con particiones');
+});
+
 test('script de operaciones (Linux, macOS, Windows)', () => {
   const disk = { id: '/dev/sdz', path: '/dev/sdz', number: 3, partitionStyle: 'gpt', isSystem: false, partitions: [{ id: '/dev/sdz1', path: '/dev/sdz1', number: 1, start: 1048576, size: 1e9, fs: 'ext4', label: 'a', flags: {} }], free: [{ start: 1048576 + 1e9, size: 5e9 }] };
   const ops = [

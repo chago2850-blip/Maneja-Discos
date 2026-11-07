@@ -49,6 +49,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Pruebas del motor y lectura de discos reales de este sistema
+        env:
+          MD_LIST_SMOKE: "1"
+        run: node --test test/engine.test.js
       - name: Desactivar Spotlight (evita "hdiutil detach" ocupado)
         if: runner.os == 'macOS'
         run: sudo mdutil -a -i off || true

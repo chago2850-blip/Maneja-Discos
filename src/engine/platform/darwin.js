@@ -26,8 +26,17 @@ const FS_NAME = { apfs: 'APFS', hfs: 'JHFS+', exfat: 'ExFAT', fat32: 'MS-DOS FAT
 const MKNTFS = ['/usr/local/libexec/macntfs/bin/mkntfs', '/usr/local/sbin/mkntfs', '/opt/homebrew/sbin/mkntfs'].find((p) => fs.existsSync(p));
 const MKEXT4 = ['/opt/homebrew/opt/e2fsprogs/sbin/mkfs.ext4', '/usr/local/opt/e2fsprogs/sbin/mkfs.ext4'].find((p) => fs.existsSync(p));
 
+/**
+ * diskutil exige -plist justo después del verbo:
+ *   diskutil list -plist physical · diskutil info -plist disk2 · diskutil apfs list -plist
+ */
+function plistArgs(args) {
+  if (args[0] === 'apfs') return ['apfs', args[1], '-plist', ...args.slice(2)];
+  return [args[0], '-plist', ...args.slice(1)];
+}
+
 async function plist(args) {
-  const r = await runOk(DISKUTIL, [...args, '-plist']);
+  const r = await runOk(DISKUTIL, plistArgs(args));
   const j = await runOk('/usr/bin/plutil', ['-convert', 'json', '-o', '-', '-'], { input: r.stdout });
   return JSON.parse(j.stdout);
 }
@@ -46,6 +55,7 @@ function normFs(info) {
 
 async function listDisks() {
   const list = await plist(['list', 'physical']);
+  const apfs = await plist(['apfs', 'list']).catch(() => null);
   const rootDev = (await run('/bin/df', ['/'])).stdout.split('\n')[1]?.split(/\s+/)[0] || '';
   const disks = [];
   for (const d of list.AllDisksAndPartitions || []) {
@@ -60,8 +70,7 @@ async function listDisks() {
       let label = pi.VolumeName || p.VolumeName || '';
       // Contenedor APFS: mostrar el volumen principal
       if (pi.Content === 'Apple_APFS' || p.Content === 'Apple_APFS') {
-        const cont = await plist(['apfs', 'list']).catch(() => null);
-        const c = cont?.Containers?.find((x) => x.DesignatedPhysicalStore === p.DeviceIdentifier || (x.PhysicalStores || []).some((s) => s.DeviceIdentifier === p.DeviceIdentifier));
+        const c = apfs?.Containers?.find((x) => x.DesignatedPhysicalStore === p.DeviceIdentifier || (x.PhysicalStores || []).some((s) => s.DeviceIdentifier === p.DeviceIdentifier));
         if (c) {
           used = c.CapacityCeiling - c.CapacityFree;
           const v = (c.Volumes || []).find((x) => !(x.Roles || []).length) || (c.Volumes || [])[0];
@@ -206,4 +215,5 @@ module.exports = {
   scriptHeader: '#!/bin/sh\n# Script generado por Maneja Discos — ejecútalo con sudo\nset -e\n',
   fileSystems: ['apfs', 'hfs', 'exfat', 'fat32', 'ntfs', 'ext4'],
   _computeFree: computeFree,
+  _plistArgs: plistArgs,
 };
