@@ -15,7 +15,7 @@
     "test": "node --test test/engine.test.js",
     "dist": "electron-builder --publish never",
     "dist:win": "electron-builder --win --publish never",
-    "dist:mac": "electron-builder --mac --publish never",
+    "dist:mac": "electron-builder --mac --arm64 --publish never && electron-builder --mac --x64 --publish never",
     "dist:linux": "electron-builder --linux --publish never"
   },
   "devDependencies": {
@@ -70,13 +70,7 @@
     },
     "mac": {
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
+        "dmg"
       ],
       "icon": "build/icon.icns",
       "category": "public.app-category.utilities",
