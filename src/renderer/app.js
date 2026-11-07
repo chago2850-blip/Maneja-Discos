@@ -354,7 +354,8 @@ function renderNav() {
   const i = state.info;
   foot.replaceChildren(
     h('div', { class: 'admin' }, h('span', { class: `dot ${i.admin ? 'ok' : 'warn'}` }), i.admin ? 'Con permisos de administrador' : 'Se pedirán permisos al aplicar'),
-    h('div', { class: 'faint', style: { marginTop: '4px' } }, `v${i.version} · ${{ win32: 'Windows', linux: 'Linux', darwin: 'macOS' }[i.platform] || i.platform} ${i.arch}`));
+    h('div', { class: 'faint', style: { marginTop: '4px' } }, `v${i.version} · ${{ win32: 'Windows', linux: 'Linux', darwin: 'macOS' }[i.platform] || i.platform} ${i.arch}`),
+    h('button', { class: 'oss-badge', title: 'Ver la licencia', onClick: () => showLegal('license') }, 'Software libre · GPL-3.0'));
 }
 
 function go(view) {
@@ -424,7 +425,17 @@ async function viewHome(actions) {
       quick('copy', 'Clonar disco', 'Pasa todo a un disco nuevo o a un SSD.', 'clone'),
       quick('eraser', 'Borrado seguro', '11 algoritmos, espacio libre y archivos.', 'wipe'),
       quick('gauge', 'Revisar un disco', 'Prueba de superficie y comprobación.', 'tools')),
-    h('div', { class: 'card' }, h('h2', {}, 'Tus discos'), state.disks.length ? state.disks.map((d) => miniDisk(d)) : h('div', { class: 'empty' }, 'No se encontraron discos.')));
+    h('div', { class: 'card' }, h('h2', {}, 'Tus discos'), state.disks.length ? state.disks.map((d) => miniDisk(d)) : h('div', { class: 'empty' }, 'No se encontraron discos.')),
+    ossFooter());
+}
+
+/** Aviso permanente de software libre (GPL-3.0, sección 5d: avisos legales apropiados). */
+function ossFooter() {
+  return h('div', { class: 'oss-footer' },
+    h('span', {}, 'Maneja Discos es ', h('b', {}, 'software libre y de código abierto'), ' bajo la licencia GNU GPL-3.0 o posterior. Se ofrece sin ninguna garantía. © 2026 Santiago Miguel.'),
+    h('span', { class: 'row' },
+      h('button', { class: 'btn ghost small', onClick: () => showLegal('license') }, 'Licencia'),
+      h('button', { class: 'btn ghost small', onClick: () => md.shell.external('https://github.com/chago2850-blip/Maneja-Discos') }, 'Código fuente')));
 }
 
 function miniDisk(d) {

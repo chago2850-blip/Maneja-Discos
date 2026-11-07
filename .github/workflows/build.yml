@@ -100,4 +100,6 @@ jobs:
             | Linux (Ubuntu/Debian) | `Maneja-Discos-…-Linux-amd64.deb` o `…-x86_64.AppImage` |
             | Linux ARM | `…-arm64.deb` o `…-arm64.AppImage` |
 
+            **Software libre y de código abierto** bajo la [GNU GPL-3.0-or-later](https://github.com/chago2850-blip/Maneja-Discos/blob/main/LICENSE). El código fuente de esta versión está en los archivos "Source code" de abajo. Se ofrece sin ninguna garantía.
+
             Las operaciones de disco piden permisos de administrador. En macOS, si el sistema bloquea la app: Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente.

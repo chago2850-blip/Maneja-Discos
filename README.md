@@ -5,6 +5,13 @@
 <h1 align="center">Maneja Discos</h1>
 <p align="center"><b>Copias de seguridad, particiones, clonado y borrado seguro de discos.<br>Libre, gratuito y de código abierto para Windows, Linux y macOS.</b></p>
 
+<p align="center">
+  <a href="LICENSE"><img alt="Licencia: GPL-3.0-or-later" src="https://img.shields.io/badge/licencia-GPL--3.0--or--later-blue.svg"></a>
+  <img alt="Código abierto" src="https://img.shields.io/badge/c%C3%B3digo-abierto-brightgreen.svg">
+  <img alt="Windows · Linux · macOS" src="https://img.shields.io/badge/plataformas-Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-informational.svg">
+  <a href="https://github.com/chago2850-blip/Maneja-Discos/releases/latest"><img alt="Última versión" src="https://img.shields.io/github/v/release/chago2850-blip/Maneja-Discos"></a>
+</p>
+
 ---
 
 Maneja Discos es una alternativa abierta a las suites comerciales de gestión de discos. No tiene licencias, periodos de prueba ni límites.
@@ -107,5 +114,7 @@ Lo que significa en la práctica:
 - **Libertades:** cualquiera puede usar la app para cualquier fin, estudiar y cambiar el código, y redistribuir copias, también por dinero.
 - **Copyleft:** quien distribuya la app o una versión modificada debe hacerlo bajo la misma GPL-3, entregar el código fuente, conservar los avisos de copyright y señalar los cambios. Nadie puede convertirla en software cerrado.
 - **Sin garantía:** el programa se ofrece "tal cual", sin ninguna garantía (secciones 15 y 16 de la licencia).
+
+¿Quieres colaborar? Lee [CONTRIBUTING.md](CONTRIBUTING.md): toda contribución se acepta bajo la misma licencia GPL-3.0-or-later.
 
 Cada archivo de código lleva el aviso de copyright y la etiqueta `SPDX-License-Identifier: GPL-3.0-or-later`. La app muestra la licencia en *Ajustes → Acerca de*, y el instalador de Windows la muestra antes de instalar. Los componentes de terceros y sus licencias están en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
