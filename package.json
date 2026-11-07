@@ -74,7 +74,7 @@
       ],
       "icon": "build/icon.icns",
       "category": "public.app-category.utilities",
-      "identity": "-",
+      "identity": null,
       "artifactName": "Maneja-Discos-${version}-macOS-${arch}.${ext}",
       "hardenedRuntime": false,
       "gatekeeperAssess": false
@@ -104,6 +104,7 @@
       "maintainer": "Santiago Miguel <chago2850@gmail.com>",
       "synopsis": "Copias, particiones, clonado y borrado seguro de discos",
       "artifactName": "Maneja-Discos-${version}-Linux-${arch}.${ext}"
-    }
+    },
+    "afterPack": "build/afterPack.js"
   }
 }
