@@ -29,12 +29,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - name: linux
+            os: ubuntu-latest
             target: --linux
-          - os: windows-latest
+          - name: windows
+            os: windows-latest
             target: --win
-          - os: macos-latest
-            target: --mac
+          - name: macos-arm64
+            os: macos-latest
+            target: --mac --arm64
+          - name: macos-x64
+            os: macos-latest
+            target: --mac --x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +49,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Desactivar Spotlight (evita "hdiutil detach" ocupado)
+        if: runner.os == 'macOS'
+        run: sudo mdutil -a -i off || true
       - name: Empaquetar
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -50,7 +59,7 @@ jobs:
         run: npx electron-builder ${{ matrix.target }} --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: instaladores-${{ matrix.os }}
+          name: instaladores-${{ matrix.name }}
           path: |
             dist/*.exe
             dist/*.AppImage
