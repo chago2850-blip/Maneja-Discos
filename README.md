@@ -21,7 +21,7 @@ Maneja Discos es una alternativa abierta a las suites comerciales de gestión de
 ### Particiones
 - **Mapa visual** de discos y particiones, con el espacio usado y el espacio libre.
 - **Operaciones pendientes**: los cambios se acumulan en una cola y se pueden revisar con **Diseño actual / Diseño nuevo**, deshacer, rehacer, descartar o **exportar como script** (`.sh` o `.ps1`) antes de **Aplicar**.
-- **Operaciones**: crear, formatear, eliminar, redimensionar, cambiar etiqueta, cambiar letra (Windows), marcar como activa u ocultar (MBR), inicializar el disco (GPT/MBR) y **convertir MBR↔GPT**.
+- **Operaciones**: crear, formatear, eliminar, redimensionar, cambiar etiqueta, cambiar letra (Windows), marcar como activa u ocultar (MBR), inicializar el disco (GPT/MBR), **convertir el disco GPT↔MBR sin borrar datos** (Windows, Linux y macOS) y **convertir una partición lógica en primaria** (MBR). Ambas opciones están también en la sección *Partición* del panel.
 - **Sistemas de archivos**:
   - Windows: NTFS, exFAT, FAT32 y ReFS.
   - Linux: ext4, NTFS, FAT32, exFAT, Btrfs, XFS, ext2/3 y swap.

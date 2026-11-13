@@ -72,8 +72,9 @@ async function blkidProbe(dev) {
 }
 
 async function fillFromBlkid(node) {
-  if (node.pttype || node.fstype) return;
+  if (node.pttype || node.fstype || node.parttype) return;
   const p = await blkidProbe(node.path);
+  if (p.PART_ENTRY_TYPE && !node.parttype) node.parttype = p.PART_ENTRY_TYPE;
   if (p.PTTYPE && node.type !== 'part') node.pttype = p.PTTYPE;
   if (p.TYPE) node.fstype = p.TYPE;
   if (p.LABEL && !node.label) node.label = p.LABEL;
@@ -81,7 +82,7 @@ async function fillFromBlkid(node) {
 }
 
 async function listDisks() {
-  const r = await runOk('lsblk', ['-J', '-b', '-o', 'NAME,KNAME,PATH,TYPE,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,FSUSED,FSSIZE,MODEL,SERIAL,ROTA,RM,TRAN,PTTYPE,PARTTYPENAME,RO']);
+  const r = await runOk('lsblk', ['-J', '-b', '-o', 'NAME,KNAME,PATH,TYPE,SIZE,FSTYPE,LABEL,UUID,MOUNTPOINT,FSUSED,FSSIZE,MODEL,SERIAL,ROTA,RM,TRAN,PTTYPE,PARTTYPE,PARTTYPENAME,RO']);
   const data = JSON.parse(r.stdout);
   for (const d of data.blockdevices || []) {
     if (d.type !== 'disk' && d.type !== 'loop') continue;
@@ -99,6 +100,10 @@ async function listDisks() {
     let isSystem = false;
     for (const p of d.children || []) {
       if (p.type !== 'part') continue;
+      // El contenedor de la partición extendida (MBR) no es una partición con datos
+      const ptype = String(p.parttype || '').toLowerCase();
+      const pnum = Number(sys(`/sys/class/block/${p.kname}/partition`));
+      if (d.pttype === 'dos' && (['0x5', '0xf', '0x85'].includes(ptype) || (!ptype && pnum <= 4 && Number(p.size) <= 1024))) continue;
       const start = Number(sys(`/sys/class/block/${p.kname}/start`)) * 512;
       const number = Number(sys(`/sys/class/block/${p.kname}/partition`));
       const mp = p.mountpoint || null;
@@ -116,7 +121,7 @@ async function listDisks() {
         letter: null,
         used: p.fsused != null ? Number(p.fsused) : null,
         type: p.parttypename || '',
-        flags: { system: mp === '/' || mp === '/boot' || mp === '/boot/efi', swap: mp === '[SWAP]' },
+        flags: { system: mp === '/' || mp === '/boot' || mp === '/boot/efi', swap: mp === '[SWAP]', logical: d.pttype === 'dos' && number >= 5 },
       });
     }
     // Un disco sin tabla con sistema de archivos directo
@@ -256,14 +261,18 @@ function plan(op, disk) {
       P('parted', ['-s', disk.path, 'set', String(part.number), 'hidden', op.value ? 'on' : 'off']);
       break;
     }
-    case 'convert': {
-      for (const p of disk.partitions) if (p.mountpoint) P('umount', [p.path], { ignoreError: true });
-      if (op.style === 'gpt') P('sgdisk', ['-g', disk.path]);
-      else {
-        if (disk.partitions.length > 4) throw new Error('Para convertir a MBR el disco debe tener 4 particiones o menos.');
-        P('sgdisk', ['-m', disk.partitions.map((p) => p.number).join(':'), disk.path]);
+    case 'convert':
+    case 'primary': {
+      // Se reescribe solo la tabla (ptable.js); los datos de las particiones no se mueven
+      for (const p of disk.partitions) {
+        if (p.mountpoint) P('umount', [p.path], { ignoreError: true });
+        if (p.flags && p.flags.swap) P('swapoff', [p.path], { ignoreError: true });
       }
+      steps.push(op.kind === 'convert'
+        ? { js: op.style === 'mbr' ? 'gptToMbr' : 'mbrToGpt', device: disk.path, sectorSize: disk.sectorSize, diskSize: disk.size, note: `Convertir la tabla a ${op.style.toUpperCase()} sin borrar datos` }
+        : { js: 'logicalToPrimary', device: disk.path, start: part.start, sectorSize: disk.sectorSize, diskSize: disk.size, note: `Convertir ${part.path} en partición primaria` });
       P('partprobe', [disk.path], { ignoreError: true });
+      P('udevadm', ['settle'], { ignoreError: true });
       break;
     }
     case 'letter':

@@ -11,7 +11,8 @@ Cambiar etiqueta,particiones,must,yes,yes,F07
 Cambiar letra de unidad (Windows),particiones,should,yes,yes,
 Ocultar / activar partición,particiones,could,yes,yes,
 Inicializar disco (nueva tabla MBR/GPT),particiones,must,yes,yes,
-Convertir MBR↔GPT sin pérdida,particiones,should,yes,yes,F11; sgdisk / mbr2gpt
+Convertir MBR↔GPT sin pérdida,particiones,should,yes,yes,F11; ptable.js (JS puro) / mbr2gpt
+Convertir partición lógica en primaria,particiones,should,yes,yes,ptable.js
 Comprobar y reparar sistema de archivos,herramientas,must,yes,yes,F13
 Prueba de superficie (sectores dañados/lentos),herramientas,should,yes,yes,F12
 Copia de seguridad de imagen de disco/partición,respaldo,must,yes,yes,F01

@@ -95,7 +95,7 @@ async function listDisks() {
         letter: null,
         used,
         type: p.Content || '',
-        flags: { system: p.Content === 'EFI' || isSystem, efi: p.Content === 'EFI' },
+        flags: { system: p.Content === 'EFI' || isSystem, efi: p.Content === 'EFI', logical: d.Content === 'FDisk_partition_scheme' && Number(String(p.DeviceIdentifier).replace(/^disk\d+s/, '')) >= 5 },
       });
     }
     parts.sort((a, b) => a.start - b.start);
@@ -178,7 +178,18 @@ function plan(op, disk) {
       P(DISKUTIL, [part.fs === 'apfs' ? 'apfs' : 'resizeVolume', ...(part.fs === 'apfs' ? ['resizeContainer', part.id] : [part.id]), `${op.size}B`]);
       break;
     case 'convert':
-      throw new Error('macOS no permite convertir MBR↔GPT sin borrar. Usa "Inicializar disco".');
+    case 'primary': {
+      if (disk.isSystem) throw new Error('No se puede cambiar la tabla del disco de arranque de macOS en uso.');
+      const js = op.kind === 'convert'
+        ? { js: op.style === 'mbr' ? 'gptToMbr' : 'mbrToGpt', note: `Convertir la tabla a ${op.style.toUpperCase()} sin borrar datos` }
+        : { js: 'logicalToPrimary', start: part.start, note: `Convertir ${part.id} en partición primaria` };
+      steps.push({
+        ...js, device: disk.rawPath, sectorSize: disk.sectorSize, diskSize: disk.size,
+        before: [{ cmd: DISKUTIL, args: ['unmountDisk', 'force', disk.id] }],
+        after: [{ cmd: DISKUTIL, args: ['mountDisk', disk.id], ignoreError: true }],
+      });
+      break;
+    }
     case 'active':
     case 'hide':
     case 'letter':

@@ -200,6 +200,126 @@ test('script de operaciones (Linux, macOS, Windows)', () => {
   assert.match(m, /diskutil rename/);
 });
 
+// ---------- Tablas de particiones en JavaScript (archivos de imagen) ----------
+const ptable = require('../src/engine/ptable');
+const hasTool = (t) => { try { execFileSync('sh', ['-c', `command -v ${t}`]); return true; } catch { return false; } };
+const canTables = process.platform !== 'win32' && hasTool('sfdisk') && hasTool('sgdisk');
+const sfdump = (img) => JSON.parse(execFileSync('sfdisk', ['-J', img]).toString()).partitiontable;
+
+function mbrImage(name, layout) {
+  const img = path.join(tmp, name);
+  fs.writeFileSync(img, Buffer.alloc(0));
+  fs.truncateSync(img, 64 * 1024 * 1024);
+  execFileSync('sfdisk', ['-q', img], { input: `label: dos\n${layout}\n` });
+  return img;
+}
+
+test('tabla: GPT → MBR → GPT conserva posiciones y tipos (comprobado con sfdisk/sgdisk)', { skip: !canTables }, () => {
+  const img = path.join(tmp, 'gpt.img');
+  fs.writeFileSync(img, Buffer.alloc(0));
+  fs.truncateSync(img, 64 * 1024 * 1024);
+  execFileSync('sgdisk', ['-n', '1:2048:+8M', '-t', '1:ef00', '-n', '2:0:+16M', '-t', '2:0700', '-n', '3:0:+8M', '-t', '3:8300', '-n', '4:0:+4M', '-t', '4:8200', img], { stdio: 'ignore' });
+  const before = ptable.inspect(img).partitions.map((p) => [p.start, p.count]);
+  const r = ptable.gptToMbr(img);
+  assert.strictEqual(r.partitions, 4);
+  const m = sfdump(img);
+  assert.strictEqual(m.label, 'dos');
+  assert.deepStrictEqual(m.partitions.map((p) => [p.start, p.size]), before);
+  assert.deepStrictEqual(m.partitions.map((p) => p.type), ['ef', '7', '83', '82']);
+  ptable.mbrToGpt(img);
+  execFileSync('sgdisk', ['-v', img]); // falla si la GPT tiene errores de CRC o de estructura
+  const g = sfdump(img);
+  assert.strictEqual(g.label, 'gpt');
+  assert.deepStrictEqual(g.partitions.map((p) => [p.start, p.size]), before);
+  assert.strictEqual(g.partitions[0].type, 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B');
+  assert.strictEqual(g.partitions[2].type, '0FC63DAF-8483-4772-8E79-3D69D8477DE4');
+});
+
+test('tabla: GPT con más de 4 particiones → MBR con lógicas, y vuelta a GPT', { skip: !canTables }, () => {
+  const img = path.join(tmp, 'gpt6.img');
+  fs.writeFileSync(img, Buffer.alloc(0));
+  fs.truncateSync(img, 64 * 1024 * 1024);
+  // Huecos de 1 MiB entre particiones: espacio para los EBR
+  const args = [];
+  for (let i = 1; i <= 6; i++) args.push('-n', `${i}:${2048 + (i - 1) * 6 * 2048}:+4M`);
+  execFileSync('sgdisk', [...args, img], { stdio: 'ignore' });
+  const before = ptable.inspect(img).partitions.map((p) => [p.start, p.count]);
+  const r = ptable.gptToMbr(img);
+  assert.strictEqual(r.logical, 3);
+  const m = sfdump(img);
+  const data = m.partitions.filter((p) => !['5', 'f', '85'].includes(p.type));
+  assert.deepStrictEqual(data.map((p) => [p.start, p.size]), before);
+  ptable.mbrToGpt(img);
+  execFileSync('sgdisk', ['-v', img]);
+  assert.deepStrictEqual(sfdump(img).partitions.map((p) => [p.start, p.size]), before);
+});
+
+test('tabla: MBR → GPT falla si la última partición llega al final del disco', { skip: !canTables }, () => {
+  const img = mbrImage('lleno.img', 'start=2048, type=83');
+  assert.throws(() => ptable.mbrToGpt(img), /final del disco/);
+  assert.strictEqual(sfdump(img).label, 'dos', 'no debe tocar el disco si falla');
+});
+
+test('tabla: convertir lógicas en primarias (primera, última y única)', { skip: !canTables }, () => {
+  const layout = [
+    'start=2048, size=16384, type=83',
+    'start=20480, size=81920, type=5',
+    'start=22528, size=16384, type=83',
+    'start=40960, size=16384, type=7',
+    'start=59392, size=16384, type=c',
+  ].join('\n');
+  const S = 512;
+  // primera lógica
+  let img = mbrImage('log1.img', layout);
+  ptable.logicalToPrimary(img, 22528 * S);
+  let t = ptable.inspect(img);
+  assert.deepStrictEqual(t.partitions.map((p) => [p.start, p.primary]), [[2048, true], [22528, true], [40960, false], [59392, false]]);
+  let sf = sfdump(img).partitions;
+  assert.deepStrictEqual(sf.filter((p) => p.type !== '5').map((p) => [p.start, p.size, p.type]), [[2048, 16384, '83'], [22528, 16384, '83'], [40960, 16384, '7'], [59392, 16384, 'c']]);
+  // última lógica
+  img = mbrImage('log2.img', layout);
+  ptable.logicalToPrimary(img, 59392 * S);
+  t = ptable.inspect(img);
+  assert.deepStrictEqual(t.partitions.map((p) => [p.start, p.primary]), [[2048, true], [22528, false], [40960, false], [59392, true]]);
+  sf = sfdump(img).partitions;
+  assert.strictEqual(sf.filter((p) => p.type !== '5').length, 4);
+  // la del medio no se puede
+  img = mbrImage('log3.img', layout);
+  assert.throws(() => ptable.logicalToPrimary(img, 40960 * S), /primera o la última/);
+  // ya primaria
+  assert.throws(() => ptable.logicalToPrimary(img, 2048 * S), /ya es primaria/);
+  // única lógica, con las 4 entradas ocupadas: la extendida se sustituye
+  img = mbrImage('log4.img', [
+    'start=2048, size=8192, type=83', 'start=10240, size=8192, type=83', 'start=18432, size=8192, type=83',
+    'start=26624, size=40960, type=5', 'start=28672, size=16384, type=7',
+  ].join('\n'));
+  ptable.logicalToPrimary(img, 28672 * S);
+  t = ptable.inspect(img);
+  assert.strictEqual(t.extended, null);
+  assert.deepStrictEqual(t.partitions.map((p) => [p.start, p.count, p.primary]), [[2048, 8192, true], [10240, 8192, true], [18432, 8192, true], [28672, 16384, true]]);
+  // lógica con 3 primarias + extendida y varias lógicas: no hay entrada libre
+  img = mbrImage('log5.img', [
+    'start=2048, size=8192, type=83', 'start=10240, size=8192, type=83', 'start=18432, size=8192, type=83',
+    'start=26624, size=40960, type=5', 'start=28672, size=8192, type=7', 'start=38912, size=8192, type=7',
+  ].join('\n'));
+  assert.throws(() => ptable.logicalToPrimary(img, 28672 * S), /4 entradas/);
+});
+
+test('script de conversiones (Linux, macOS, Windows)', () => {
+  const disk = { id: '/dev/sdz', path: '/dev/sdz', rawPath: '/dev/sdz', number: 3, size: 64e9, sectorSize: 512, partitionStyle: 'mbr', isSystem: false, partitions: [{ id: '/dev/sdz5', path: '/dev/sdz5', number: 5, start: 2e9, size: 1e9, fs: 'ntfs', label: 'L', flags: { logical: true } }], free: [] };
+  assert.ok(partition.validate({ kind: 'primary', diskId: disk.id, partition: disk.partitions[0] }, disk));
+  assert.throws(() => partition.validate({ kind: 'primary', diskId: disk.id, partition: { ...disk.partitions[0], flags: {} } }, disk), /ya es primaria/);
+  assert.throws(() => partition.validate({ kind: 'convert', diskId: disk.id, style: 'mbr' }, disk), /ya usa MBR/);
+  const l = partition.script([{ kind: 'convert', diskId: disk.id, style: 'gpt' }, { kind: 'primary', diskId: disk.id, partition: disk.partitions[0] }], [disk], 'linux');
+  assert.match(l, /Convertir la tabla a GPT/);
+  assert.match(l, /en partición primaria/);
+  const w = partition.script([{ kind: 'convert', diskId: '3', style: 'gpt' }], [{ ...disk, id: '3', rawPath: '\\\\.\\PhysicalDrive3' }], 'win32');
+  assert.match(w, /Set-Disk -Number 3 .*-IsOffline \$true/);
+  assert.match(w, /Update-HostStorageCache/);
+  const m = partition.script([{ kind: 'convert', diskId: 'disk4', style: 'gpt' }], [{ ...disk, id: 'disk4', rawPath: '/dev/rdisk4' }], 'darwin');
+  assert.match(m, /unmountDisk force disk4/);
+});
+
 // ---------- Pruebas con dispositivos de bloque reales ----------
 const canLoop = process.platform === 'linux' && process.getuid && process.getuid() === 0 && fs.existsSync('/dev/loop-control');
 
@@ -273,6 +393,35 @@ test('dispositivo real: inicializar, crear, formatear, etiquetar, redimensionar,
     // borrar partición
     await partition.apply([{ kind: 'delete', diskId: dev, partition: disk.partitions[1] }], emit);
     assert.strictEqual((await find()).partitions.length, 1);
+  } catch (e) {
+    console.error(log.slice(-30).join('\n'));
+    throw e;
+  } finally {
+    execFileSync('losetup', ['-d', dev]);
+  }
+});
+
+test('dispositivo real: detectar lógicas y convertirlas en primarias', { skip: !canLoop || !canTables }, async () => {
+  const img = mbrImage('loop-log.img', [
+    'start=2048, size=16384, type=83', 'start=20480, size=81920, type=5',
+    'start=22528, size=16384, type=83', 'start=40960, size=16384, type=7',
+  ].join('\n'));
+  const dev = execFileSync('losetup', ['--find', '--show', '--partscan', img]).toString().trim();
+  const log = [];
+  const emit = (e) => { if (e.message) log.push(e.message); };
+  try {
+    try { execFileSync('partprobe', [dev]); execFileSync('udevadm', ['settle']); } catch { /* sin udev */ }
+    const find = async () => (await linux.listDisks()).find((d) => d.id === dev);
+    let disk = await find();
+    assert.strictEqual(disk.partitionStyle, 'mbr');
+    assert.deepStrictEqual(disk.partitions.map((p) => !!p.flags.logical), [false, true, true], 'la extendida no se lista y las lógicas se marcan');
+    await partition.apply([{ kind: 'primary', diskId: dev, partition: disk.partitions[2] }], emit);
+    disk = await find();
+    assert.deepStrictEqual(disk.partitions.map((p) => !!p.flags.logical), [false, true, false]);
+    await partition.apply([{ kind: 'primary', diskId: dev, partition: disk.partitions[1] }], emit);
+    disk = await find();
+    assert.deepStrictEqual(disk.partitions.map((p) => !!p.flags.logical), [false, false, false]);
+    assert.strictEqual(disk.partitions.length, 3);
   } catch (e) {
     console.error(log.slice(-30).join('\n'));
     throw e;

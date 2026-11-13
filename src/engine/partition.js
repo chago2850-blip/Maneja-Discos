@@ -18,12 +18,13 @@
 'use strict';
 // Operaciones pendientes: validar, generar script y aplicar.
 const platform = require('./platform');
+const ptable = require('./ptable');
 const { run, powershellOk, runOk, MiB } = require('./util');
 
 const KIND_TITLE = {
   init: 'Inicializar disco', create: 'Crear partición', format: 'Formatear', delete: 'Eliminar partición',
   label: 'Cambiar etiqueta', letter: 'Cambiar letra', resize: 'Redimensionar', active: 'Marcar activa',
-  hide: 'Ocultar/mostrar', convert: 'Convertir tabla de particiones',
+  hide: 'Ocultar/mostrar', convert: 'Convertir tabla de particiones', primary: 'Convertir en primaria',
 };
 
 function describe(op) {
@@ -34,7 +35,8 @@ function describe(op) {
     case 'format': return `${t} ${target} como ${op.fs}${op.label ? ` "${op.label}"` : ''}`;
     case 'label': return `${t} de ${target} a "${op.label}"`;
     case 'resize': return `${t} ${target} a ${(op.size / 1e9).toFixed(2)} GB`;
-    case 'init': case 'convert': return `${t} ${op.diskId} a ${op.style.toUpperCase()}`;
+    case 'init': case 'convert': return `${t} ${op.diskId} a ${op.style.toUpperCase()}${op.kind === 'convert' ? ' (sin borrar datos)' : ''}`;
+    case 'primary': return `${t} la partición lógica ${target}`;
     case 'letter': return `${t} de ${target} a ${op.letter ? `${op.letter}:` : '(ninguna)'}`;
     default: return `${t} ${target}`;
   }
@@ -47,6 +49,19 @@ function validate(op, disk) {
   const sys = disk.isSystem;
   if (['init', 'convert'].includes(op.kind) && sys && !(op.kind === 'convert' && process.platform === 'win32')) {
     throw new Error('No se puede inicializar ni convertir el disco del sistema en uso.');
+  }
+  if (op.kind === 'convert') {
+    if (!['gpt', 'mbr'].includes(disk.partitionStyle)) throw new Error('El disco no tiene una tabla GPT o MBR que convertir. Usa "Inicializar".');
+    if (disk.partitionStyle === op.style) throw new Error(`El disco ya usa ${op.style.toUpperCase()}.`);
+    if (op.style === 'mbr' && disk.size > 2 ** 32 * (disk.sectorSize || 512)) {
+      const lastEnd = Math.max(0, ...disk.partitions.map((p) => p.start + p.size));
+      if (lastEnd > 2 ** 32 * (disk.sectorSize || 512)) throw new Error('MBR solo llega a 2 TiB y hay particiones más allá de ese límite.');
+    }
+  }
+  if (op.kind === 'primary') {
+    if (disk.partitionStyle !== 'mbr') throw new Error('Las particiones primarias y lógicas solo existen en discos MBR. En GPT todas son primarias.');
+    if (!op.partition || !(op.partition.flags && op.partition.flags.logical)) throw new Error('La partición ya es primaria.');
+    if (sys) throw new Error('No se puede cambiar la tabla del disco del sistema en uso. Hazlo desde un medio de arranque.');
   }
   if (op.partition) {
     const p = op.partition;
@@ -77,7 +92,12 @@ function script(ops, disks, platformName = process.platform) {
     const disk = disks.find((d) => d.id === op.diskId);
     lines.push(`\n# ${describe(op)}`);
     try {
-      for (const step of plat.plan(op, disk)) lines.push(plat.scriptLine(step));
+      for (const step of plat.plan(op, disk)) {
+        if (!step.js) { lines.push(plat.scriptLine(step)); continue; }
+        for (const b of step.before || []) lines.push(plat.scriptLine(b));
+        lines.push(`# (paso interno de Maneja Discos: ${step.note || step.js} en ${step.device}; reescribe solo la tabla)`);
+        for (const a of step.after || []) lines.push(plat.scriptLine(a));
+      }
     } catch (e) {
       lines.push(`# ⚠ ${e.message}`);
     }
@@ -85,7 +105,29 @@ function script(ops, disks, platformName = process.platform) {
   return lines.join('\n') + '\n';
 }
 
+/** Pasos que reescriben la tabla de particiones directamente (ptable.js). */
+function execJsStep(step, emit) {
+  const opts = { sectorSize: step.sectorSize, diskSize: step.diskSize };
+  emit({ type: 'log', message: `» ${step.note || step.js} (${step.device})` });
+  let r;
+  if (step.js === 'gptToMbr') r = ptable.gptToMbr(step.device, opts);
+  else if (step.js === 'mbrToGpt') r = ptable.mbrToGpt(step.device, opts);
+  else if (step.js === 'logicalToPrimary') r = ptable.logicalToPrimary(step.device, step.start, opts);
+  else throw new Error(`Paso interno desconocido: ${step.js}`);
+  if (r && r.skipped && r.skipped.length) emit({ type: 'log', message: `Se omitieron particiones sin equivalente en MBR: ${r.skipped.join(', ')}` });
+  return r;
+}
+
 async function execStep(step, emit) {
+  if (step.js) {
+    for (const b of step.before || []) await execStep(b, emit);
+    try {
+      execJsStep(step, emit);
+    } finally {
+      for (const a of step.after || []) await execStep({ ...a, ignoreError: true }, emit).catch((e) => emit({ type: 'log', message: e.message }));
+    }
+    return;
+  }
   if (step.ps) {
     emit({ type: 'log', message: `PS> ${step.ps}` });
     const r = await powershellOk(step.ps);
@@ -170,4 +212,4 @@ async function trim(diskId, partStart, emit) {
   return { ok: true };
 }
 
-module.exports = { describe, validate, script, apply, fsCheck, trim, KIND_TITLE, runOk };
+module.exports = { describe, validate, script, apply, fsCheck, trim, KIND_TITLE, runOk, execStep };

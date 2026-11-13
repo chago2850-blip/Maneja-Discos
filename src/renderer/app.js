@@ -284,7 +284,8 @@ function simulate(disks, ops) {
     const p = op.partition && d.partitions.find((x) => Math.abs(x.start - op.partition.start) < MiB);
     switch (op.kind) {
       case 'init': d.partitions = []; d.partitionStyle = op.style; d.free = [{ start: MiB, size: d.size - 2 * MiB }]; break;
-      case 'convert': d.partitionStyle = op.style; break;
+      case 'convert': d.partitionStyle = op.style; d.partitions.forEach((x) => { x.flags = { ...x.flags, logical: false }; }); break;
+      case 'primary': if (p) { p.flags = { ...p.flags, logical: false }; p.pending = true; } break;
       case 'create': {
         d.partitions.push({ id: `nuevo-${i}`, start: op.start, size: op.size, fs: op.fs === 'none' ? null : op.fs, label: op.label, letter: op.letter, pending: true, flags: {} });
         const out = [];
@@ -528,7 +529,7 @@ function propsPanel(disks) {
         act('gauge', 'Prueba de superficie', () => { state.toolsPreset = { kind: 'disk', diskId: d.id }; go('tools'); }),
         h('div', { class: 'section-label' }, 'Tabla de particiones'),
         act('layers', 'Inicializar (nueva tabla GPT/MBR)…', () => opInit(realDisk), { danger: true, disabled: d.isSystem }),
-        act('swap', d.partitionStyle === 'gpt' ? 'Convertir a MBR' : 'Convertir a GPT', () => queue({ kind: 'convert', diskId: d.id, style: d.partitionStyle === 'gpt' ? 'mbr' : 'gpt' }), { disabled: isMac || d.partitionStyle === 'none' }),
+        act('swap', d.partitionStyle === 'gpt' ? 'Convertir a MBR (sin borrar)…' : 'Convertir a GPT (sin borrar)…', () => opConvert(realDisk || d), { disabled: !['gpt', 'mbr'].includes(d.partitionStyle) || !convertAllowed(d) }),
         act('eraser', 'Borrar el disco de forma segura', () => { state.wipePreset = { mode: 'region', target: { kind: 'disk', diskId: d.id } }; go('wipe'); }, { danger: true, disabled: d.isSystem })));
   }
 
@@ -555,6 +556,7 @@ function propsPanel(disks) {
       h('dt', {}, 'Usado'), h('dd', {}, p.used != null ? `${fmtBytes(p.used)} (${usedPct} %)` : '—'),
       h('dt', {}, isWin ? 'Letra' : 'Montaje'), h('dd', {}, isWin ? (p.letter ? `${p.letter}:` : '—') : (p.mountpoint || 'No montada')),
       h('dt', {}, 'Tipo'), h('dd', {}, p.type || '—'),
+      d.partitionStyle === 'mbr' ? [h('dt', {}, 'Entrada MBR'), h('dd', {}, p.flags?.logical ? 'Lógica' : 'Primaria')] : null,
       h('dt', {}, 'Inicio'), h('dd', {}, `${(p.start / MiB).toFixed(0)} MiB`)),
     sys ? h('div', { class: 'notice info', style: { marginBottom: '12px' } }, 'Partición del sistema en uso: no se puede formatear, eliminar ni redimensionar desde aquí.') : null,
     pend ? h('div', { class: 'notice', style: { marginBottom: '12px' } }, 'Esta partición se creará al aplicar los cambios.') : null,
@@ -566,6 +568,8 @@ function propsPanel(disks) {
       act('tag', 'Cambiar etiqueta…', () => opLabel(d, realPart || p), { disabled: pend || !p.fs }),
       act('resize', 'Redimensionar…', () => opResize(d, realPart || p), { disabled: sys || pend }),
       isWin ? act('hash', 'Cambiar letra de unidad…', () => opLetter(d, realPart || p), { disabled: pend }) : null,
+      d.partitionStyle === 'mbr' ? act('layers', p.flags?.logical ? 'Convertir en primaria…' : 'Ya es primaria', () => opPrimary(d, realPart || p), { disabled: pend || !p.flags?.logical || d.isSystem, title: d.isSystem ? 'No disponible en el disco del sistema en uso' : p.flags?.logical ? 'Pasa esta partición lógica a primaria sin borrar datos' : 'Esta partición ya es primaria' }) : null,
+      ['gpt', 'mbr'].includes(d.partitionStyle) ? act('swap', `Convertir el disco a ${d.partitionStyle === 'gpt' ? 'MBR' : 'GPT'}…`, () => opConvert(realDisk || d), { disabled: !convertAllowed(d) || state.ops.some((o) => o.diskId === d.id && o.kind === 'convert'), title: convertAllowed(d) ? 'Cambia la tabla de particiones del disco sin borrar datos' : 'No disponible en el disco del sistema en uso' }) : null,
       d.partitionStyle === 'mbr' && !isMac ? act('star', p.flags?.active ? 'Desmarcar como activa' : 'Marcar como activa', () => queue({ kind: 'active', diskId: d.id, partition: realPart, value: !p.flags?.active }), { disabled: pend }) : null,
       d.partitionStyle === 'mbr' && !isMac ? act('eyeoff', p.flags?.hidden ? 'Mostrar partición' : 'Ocultar partición', () => queue({ kind: 'hide', diskId: d.id, partition: realPart, value: !p.flags?.hidden }), { disabled: pend || sys }) : null,
       act('trash', 'Eliminar partición', () => opDelete(d, realPart), { danger: true, disabled: sys || pend }),
@@ -650,6 +654,49 @@ async function opDelete(d, p) {
   if (await confirmDanger({ title: 'Eliminar partición', text: `Se eliminará "${p.label || p.id}" (${fmtBytes(p.size)}) y todos sus datos cuando apliques los cambios.`, word: 'ELIMINAR', action: 'Añadir a pendientes' })) {
     queue({ kind: 'delete', diskId: d.id, partition: p });
   }
+}
+
+function convertAllowed(d) {
+  const plat = state.info.platform;
+  if (!d.isSystem) return true;
+  return plat === 'win32' && d.partitionStyle === 'mbr'; // mbr2gpt convierte el disco de Windows en uso
+}
+
+function opConvert(d) {
+  const to = d.partitionStyle === 'gpt' ? 'mbr' : 'gpt';
+  const parts = d.partitions.length;
+  const notes = to === 'mbr'
+    ? [
+      'MBR admite hasta 4 particiones primarias; si hay más, se crean lógicas cuando hay un sector libre antes de cada una.',
+      'MBR solo llega a 2 TiB. Las particiones reservadas de Microsoft (MSR) se omiten porque no existen en MBR.',
+      'Si el disco arranca un sistema en modo UEFI, después de convertirlo deberá arrancar en modo BIOS/Legacy.',
+    ]
+    : [
+      'GPT necesita 1 MB libre al final del disco para su copia de seguridad.',
+      'Las particiones lógicas pasan a ser particiones normales de GPT.',
+      d.isSystem ? 'Disco de Windows en uso: se usará mbr2gpt; activa el arranque UEFI en la BIOS después de reiniciar.' : 'Si el disco arranca un sistema en modo BIOS, después deberá arrancar en modo UEFI.',
+    ];
+  modal({
+    title: `Convertir ${d.model} a ${to.toUpperCase()}`,
+    body: h('div', {},
+      h('div', { class: 'notice info', style: { marginBottom: '12px' } }, `Se cambia la tabla de particiones de ${d.partitionStyle.toUpperCase()} a ${to.toUpperCase()} sin borrar datos (${parts} partición(es)). Solo se reescriben los sectores de la tabla.`),
+      h('ul', { class: 'muted', style: { margin: '0 0 12px 18px', lineHeight: 1.5 } }, notes.map((n) => h('li', {}, n))),
+      h('div', { class: 'notice', style: { marginBottom: '4px' } }, 'Recomendado: haz una copia de seguridad del disco antes de aplicar. Las particiones se desmontarán mientras se aplica el cambio.')),
+    buttons: [{ label: 'Cancelar' }, { label: 'Añadir a pendientes', kind: 'primary', onClick: () => queue({ kind: 'convert', diskId: d.id, style: to }) }],
+  });
+}
+
+function opPrimary(d, p) {
+  modal({
+    title: `Convertir ${p.label || p.id} en primaria`,
+    body: h('div', {},
+      h('div', { class: 'notice info', style: { marginBottom: '12px' } }, 'La partición lógica pasará a ser primaria sin borrar ni mover sus datos.'),
+      h('ul', { class: 'muted', style: { margin: '0 0 12px 18px', lineHeight: 1.5 } },
+        h('li', {}, 'MBR tiene 4 entradas: hace falta una libre (si es la única lógica, ocupa el lugar de la extendida).'),
+        h('li', {}, 'Solo se puede convertir la primera o la última partición lógica de la extendida.'),
+        h('li', {}, 'La numeración de las particiones puede cambiar (por ejemplo, sda5 → sda2).'))),
+    buttons: [{ label: 'Cancelar' }, { label: 'Añadir a pendientes', kind: 'primary', onClick: () => queue({ kind: 'primary', diskId: d.id, partition: p }) }],
+  });
 }
 
 function opInit(d) {

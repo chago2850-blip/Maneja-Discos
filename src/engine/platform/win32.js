@@ -57,7 +57,8 @@ async function listDisks() {
   const arr = (x) => (Array.isArray(x) ? x : x ? [x] : []);
   const parts = arr(data.parts);
   return arr(data.disks).map((d) => {
-    const ps = parts.filter((p) => p.DiskNumber === d.Number).map((p) => {
+    const isExt = (p) => String(p.Type) === 'Extended' || [5, 15, 133].includes(Number(p.MbrType));
+    const ps = parts.filter((p) => p.DiskNumber === d.Number && !isExt(p)).map((p) => {
       const letter = letterOf(p.DriveLetter);
       return {
         id: `${d.Number}:${p.PartitionNumber}`,
@@ -71,7 +72,7 @@ async function listDisks() {
         letter,
         used: p.VolSize != null && p.Remaining != null ? Number(p.VolSize) - Number(p.Remaining) : null,
         type: p.Type || '',
-        flags: { system: !!(p.IsSystem || p.IsBoot) || (letter && letter === (process.env.SystemDrive || 'C:')[0]), active: !!p.IsActive, hidden: !!p.IsHidden, boot: !!p.IsBoot },
+        flags: { system: !!(p.IsSystem || p.IsBoot) || (letter && letter === (process.env.SystemDrive || 'C:')[0]), active: !!p.IsActive, hidden: !!p.IsHidden, boot: !!p.IsBoot, logical: String(p.Type) === 'Logical' },
       };
     }).sort((a, b) => a.start - b.start);
     const style = String(d.PartitionStyle || '').toUpperCase();
@@ -109,6 +110,19 @@ function computeFree(size, parts, style) {
   }
   if (end - cursor >= MiB) free.push({ start: cursor, size: Math.floor((end - cursor) / MiB) * MiB });
   return free;
+}
+
+/** Paso que reescribe la tabla en crudo con el disco fuera de línea (Windows bloquea si no). */
+function rawTableStep(disk, extra) {
+  const n = disk.number;
+  return {
+    ...extra,
+    device: disk.rawPath,
+    sectorSize: disk.sectorSize,
+    diskSize: disk.size,
+    before: [{ ps: `Set-Disk -Number ${n} -IsReadOnly $false; Set-Disk -Number ${n} -IsOffline $true` }],
+    after: [{ ps: `Set-Disk -Number ${n} -IsOffline $false; Update-HostStorageCache` }],
+  };
 }
 
 function plan(op, disk) {
@@ -157,7 +171,12 @@ function plan(op, disk) {
     case 'convert':
       if (!disk.partitions.length) P(`Set-Disk -Number ${n} -PartitionStyle ${op.style === 'mbr' ? 'MBR' : 'GPT'}`);
       else if (op.style === 'gpt' && disk.isSystem) S.push({ cmd: 'mbr2gpt.exe', args: ['/convert', `/disk:${n}`, '/allowFullOS'] });
-      else throw new Error('Windows solo convierte sin borrar el disco del sistema de MBR a GPT (mbr2gpt). Para otros discos con particiones, respalda y usa "Inicializar disco".');
+      else if (disk.isSystem) throw new Error('El disco del sistema en uso no se puede convertir a MBR. Hazlo desde un medio de arranque.');
+      else S.push(rawTableStep(disk, { js: op.style === 'mbr' ? 'gptToMbr' : 'mbrToGpt', note: `Convertir la tabla a ${op.style.toUpperCase()} sin borrar datos` }));
+      break;
+    case 'primary':
+      if (disk.isSystem) throw new Error('No se puede cambiar la tabla del disco del sistema en uso.');
+      S.push(rawTableStep(disk, { js: 'logicalToPrimary', start: part.start, note: `Convertir la partición ${part.number} en primaria` }));
       break;
     default:
       throw new Error(`Operación no compatible: ${op.kind}`);
